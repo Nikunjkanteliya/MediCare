@@ -20,14 +20,15 @@ import {
 
 export function Footer() {
     const categories = [
-        'Pain Relief', 'Vitamins & Supplements', 'Cold & Flu',
-        'Skincare', 'Digestive Health', 'Baby Care',
+        'Swami Shakti Juice'
     ];
 
     const quickLinks = [
-        { label: 'About Us', href: '#' }, { label: 'Our Mission', href: '#' },
-        { label: 'FAQs', href: '#' }, { label: 'Return Policy', href: '#' },
-        { label: 'Privacy Policy', href: '#' },
+        { label: 'About Us', href: '/about' },
+        { label: 'Our Mission', href: '/mission' },
+        { label: 'FAQs', href: '/faq' },
+        { label: 'Return Policy', href: '/return-policy' },
+        { label: 'Privacy Policy', href: '/privacy-policy' },
     ];
 
     return (
@@ -48,11 +49,11 @@ export function Footer() {
                         <Box display="flex" alignItems="center" gap={1} mb={2}>
                             <LocalPharmacy sx={{ fontSize: 32, color: '#38bdf8' }} />
                             <Typography variant="h5" fontWeight={800} sx={{ color: '#38bdf8', letterSpacing: '-0.5px' }}>
-                                MediCare
+                                Swami Shakti Ayurved
                             </Typography>
                         </Box>
                         <Typography variant="body2" sx={{ color: '#94a3b8', lineHeight: 1.8, mb: 3 }}>
-                            Your trusted online pharmacy. Quality medicines delivered to your doorstep with care and precision.
+                            Your trusted online Ayurvedic pharmacy. Quality Ayurvedic medicines delivered to your doorstep with care and precision.
                         </Typography>
                         <Box display="flex" gap={1}>
                             {[Facebook, Twitter, Instagram].map((Icon, i) => (
@@ -80,7 +81,11 @@ export function Footer() {
                         </Typography>
                         <Box display="flex" flexDirection="column" gap={1}>
                             {categories.map((cat) => (
-                                <Link key={cat} href={`/?category=${encodeURIComponent(cat)}`} style={{ textDecoration: 'none' }}>
+                                <Link key={cat}
+                                    href={`/#products
+                                 `}
+
+                                    style={{ textDecoration: 'none' }}>
                                     <Typography
                                         variant="body2"
                                         sx={{ color: '#94a3b8', '&:hover': { color: '#38bdf8' }, transition: 'color 0.2s', cursor: 'pointer' }}

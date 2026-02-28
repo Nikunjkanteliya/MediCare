@@ -5,6 +5,7 @@ import { combineReducers } from '@reduxjs/toolkit';
 import cartReducer from '@/features/cart/cartSlice';
 import addressReducer from '@/features/address/addressSlice';
 import uiReducer from '@/features/ui/uiSlice';
+import ordersReducer from '@/features/orders/ordersSlice';
 
 const cartPersistConfig = {
     key: 'cart',
@@ -21,6 +22,7 @@ const rootReducer = combineReducers({
     cart: persistReducer(cartPersistConfig, cartReducer),
     address: persistReducer(addressPersistConfig, addressReducer),
     ui: uiReducer,
+    orders: ordersReducer,
 });
 
 export const store = configureStore({

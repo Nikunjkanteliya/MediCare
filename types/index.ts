@@ -8,7 +8,7 @@ export interface Product {
   brand: string;
   price: number;
   originalPrice?: number;
-  image: string;
+  image: string | any;
   images?: string[];
   description: string;
   shortDescription: string;
@@ -99,4 +99,45 @@ export type CheckoutStep = 'cart' | 'address' | 'payment' | 'success';
 export interface ToastOptions {
   message: string;
   type: 'success' | 'error' | 'info' | 'loading';
+}
+
+// ============================================================
+// Order API Types
+// ============================================================
+
+export interface CreateOrderRequestItem {
+  product_id: number;
+  quantity: number;
+  price: number;
+}
+
+export interface CreateOrderRequest {
+  phone: string;
+  full_name: string;
+  address_line: string;
+  city: string;
+  state: string;
+  pincode: string;
+  delivery_charge: number;
+  payment_method: 'UPI' | 'Card' | 'COD';
+  items: CreateOrderRequestItem[];
+}
+
+export interface CreateOrderResponse {
+  message: string;
+  order_id: number;
+  user_id: number;
+}
+
+export interface OrderDetailRow {
+  order_id: number;
+  customer_name: string;
+  contact_number: string;
+  full_address: string;
+  payment_method: string;
+  ordered_date: string;
+  product_name: string;
+  quantity: number;
+  price: number;
+  total_bill: number;
 }

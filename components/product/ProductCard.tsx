@@ -63,7 +63,7 @@ export function ProductCard({ product }: ProductCardProps) {
                         src={product.image}
                         alt={product.name}
                         fill
-                        style={{ objectFit: 'cover', transition: 'transform 0.4s ease' }}
+                        style={{ objectFit: 'contain', transition: 'transform 0.4s ease' }}
                         sizes="(max-width: 600px) 100vw, (max-width: 1200px) 50vw, 33vw"
                     />
                     {/* Badge */}

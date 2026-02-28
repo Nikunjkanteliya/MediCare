@@ -156,7 +156,7 @@ export default function OrderSuccessPage() {
                             </Box>
 
                             <Box sx={{ background: '#f0fdf4', borderRadius: 2, p: 1.5, mt: 2, border: '1px solid #bbf7d0', textAlign: 'center' }}>
-                                <Typography variant="body2" color="#16a34a" fontWeight={600}>💳 Payment via UPI — Success</Typography>
+                                <Typography variant="body2" color="#16a34a" fontWeight={600}>💳 Payment via {currentOrder.paymentMethod} — Success</Typography>
                             </Box>
 
                             <Box display="flex" flexDirection="column" gap={1.5} mt={4}>

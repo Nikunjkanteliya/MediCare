@@ -37,6 +37,7 @@ import { useAddress } from '@/hooks/useAddress';
 import { useAppDispatch, useAppSelector } from '@/redux/hooks';
 import { setCheckoutStep, setCurrentOrder } from '@/features/ui/uiSlice';
 import { clearCart } from '@/features/cart/cartSlice';
+import { placeOrder } from '@/features/orders/ordersSlice';
 import { AppButton } from '@/components/ui/AppButton';
 import { Spinner } from '@/components/ui/Spinner';
 import { formatPrice, calculateDelivery, generateOrderId } from '@/utils/formatters';
@@ -222,7 +223,7 @@ function AddressStep({ onNext }: { onNext: () => void }) {
 }
 
 // ── Payment Step ──────────────────────────────────────────────────────────────
-function PaymentStep({ onPlaceOrder }: { onPlaceOrder: () => void }) {
+function PaymentStep({ onPlaceOrder }: { onPlaceOrder: (method: 'UPI' | 'Card' | 'COD') => void }) {
     const [selectedMethod, setSelectedMethod] = useState<'UPI' | 'Card' | 'COD'>('UPI');
     const [upiId, setUpiId] = useState('');
     const [isProcessing, setIsProcessing] = useState(false);
@@ -233,7 +234,7 @@ function PaymentStep({ onPlaceOrder }: { onPlaceOrder: () => void }) {
         return (
             <Box textAlign="center" py={8}>
                 <Spinner />
-                <Typography variant="h6" fontWeight={700} mt={3} color="#0f172a">Processing your payment...</Typography>
+                <Typography variant="h6" fontWeight={700} mt={3} color="#0f172a">Processing your order...</Typography>
                 <Typography variant="body2" color="text.secondary" mt={1}>Please do not close this window</Typography>
             </Box>
         );
@@ -293,9 +294,8 @@ function PaymentStep({ onPlaceOrder }: { onPlaceOrder: () => void }) {
             <AppButton variant="primary" fullWidth sx={{ py: 1.8, fontSize: '1.05rem' }} onClick={async () => {
                 if (selectedMethod === 'UPI' && !upiId.trim()) { toast.error('Please enter your UPI ID'); return; }
                 setIsProcessing(true);
-                await new Promise((resolve) => setTimeout(resolve, 2500));
+                await onPlaceOrder(selectedMethod);
                 setIsProcessing(false);
-                onPlaceOrder();
             }}>
                 Pay {formatPrice(totalAmount + deliveryCharge)} Securely
             </AppButton>
@@ -314,24 +314,52 @@ export default function CheckoutPage() {
     const stepIndex = ['cart', 'address', 'payment'].indexOf(checkoutStep);
     const deliveryCharge = calculateDelivery(totalAmount);
 
-    const handlePlaceOrder = () => {
+    const handlePlaceOrder = async (paymentMethod: 'UPI' | 'Card' | 'COD') => {
         if (!selectedAddress) return;
-        const order = {
-            orderId: generateOrderId(),
-            items,
-            address: selectedAddress,
-            totalAmount,
-            deliveryCharge,
-            discount: 0,
-            paymentMethod: 'UPI' as const,
-            paymentStatus: 'success' as const,
-            status: 'placed' as const,
-            createdAt: new Date().toISOString(),
+
+        // Build the API request payload
+        const payload = {
+            phone: selectedAddress.phone,
+            full_name: selectedAddress.fullName,
+            address_line: selectedAddress.addressLine,
+            city: selectedAddress.city,
+            state: selectedAddress.state,
+            pincode: selectedAddress.pincode,
+            delivery_charge: deliveryCharge,
+            payment_method: paymentMethod,
+            items: items.map((item) => ({
+                product_id: parseInt(item.product.id, 10) || 1,
+                quantity: item.quantity,
+                price: item.product.price,
+            })),
         };
-        dispatch(setCurrentOrder(order));
-        dispatch(clearCart());
-        dispatch(setCheckoutStep('success'));
-        router.push('/order-success');
+
+        const result = await dispatch(placeOrder(payload));
+
+        if (placeOrder.fulfilled.match(result)) {
+            // Success: store order in UI state, clear cart, go to success page
+            const order = {
+                orderId: String(result.payload.order_id),
+                items,
+                address: selectedAddress,
+                totalAmount,
+                deliveryCharge,
+                discount: 0,
+                paymentMethod,
+                paymentStatus: 'success' as const,
+                status: 'placed' as const,
+                createdAt: new Date().toISOString(),
+            };
+            dispatch(setCurrentOrder(order));
+            dispatch(clearCart());
+            dispatch(setCheckoutStep('success'));
+            toast.success(`Order #${result.payload.order_id} placed successfully!`);
+            router.push('/order-success');
+        } else {
+            // Error: show toast
+            const errorMsg = (result.payload as string) || 'Failed to place order. Please try again.';
+            toast.error(errorMsg);
+        }
     };
 
     if (items.length === 0) {
