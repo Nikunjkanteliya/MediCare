@@ -29,6 +29,9 @@ import {
     Work,
     Phone,
     Lock,
+    CreditCard,
+    Smartphone,
+    LocalShipping,
 } from '@mui/icons-material';
 import { useForm, Controller, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -40,12 +43,59 @@ import { clearCart } from '@/features/cart/cartSlice';
 import { placeOrder } from '@/features/orders/ordersSlice';
 import { AppButton } from '@/components/ui/AppButton';
 import { Spinner } from '@/components/ui/Spinner';
-import { formatPrice, calculateDelivery, generateOrderId } from '@/utils/formatters';
+import { formatPrice, calculateDelivery } from '@/utils/formatters';
 import { addressSchema, AddressFormValues, indianStates } from '@/utils/validators';
 import { Address } from '@/types';
 import toast from 'react-hot-toast';
 
 const steps = ['Cart', 'Address', 'Payment'];
+
+// ── Razorpay helpers ──────────────────────────────────────────────────────────
+
+/**
+ * Creates a Razorpay order via our Next.js API route, then opens the
+ * Razorpay checkout modal.  Resolves with the payment response on success.
+ */
+function openRazorpayCheckout(opts: {
+    amount: number;          // INR (not paise)
+    name: string;
+    prefill: { name: string; contact: string };
+}): Promise<{ razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }> {
+    return new Promise(async (resolve, reject) => {
+        // 1. Create order on server
+        let rzpOrderId: string;
+        try {
+            const res = await fetch('/api/razorpay/create-order', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ amount: opts.amount }),
+            });
+            if (!res.ok) throw new Error('Could not create Razorpay order');
+            const data = await res.json();
+            rzpOrderId = data.id;
+        } catch (err) {
+            reject(err);
+            return;
+        }
+
+        // 2. Open Razorpay checkout modal
+        const rzp = new window.Razorpay({
+            key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID!,
+            amount: Math.round(opts.amount * 100),  // paise
+            currency: 'INR',
+            name: opts.name,
+            description: 'MediCare Order Payment',
+            order_id: rzpOrderId,
+            handler: (response) => resolve(response),
+            prefill: opts.prefill,
+            theme: { color: '#0ea5e9' },
+            modal: {
+                ondismiss: () => reject(new Error('Payment cancelled by user')),
+            },
+        });
+        rzp.open();
+    });
+}
 
 // ── Address Form ──────────────────────────────────────────────────────────────
 function AddressForm({
@@ -224,43 +274,72 @@ function AddressStep({ onNext }: { onNext: () => void }) {
 
 // ── Payment Step ──────────────────────────────────────────────────────────────
 function PaymentStep({ onPlaceOrder }: { onPlaceOrder: (method: 'UPI' | 'Card' | 'COD') => void }) {
-    const [selectedMethod, setSelectedMethod] = useState<'UPI' | 'Card' | 'COD'>('UPI');
-    const [upiId, setUpiId] = useState('');
+    const [selectedMethod, setSelectedMethod] = useState<'UPI' | 'Card' | 'COD' | 'Razorpay'>('Razorpay');
     const [isProcessing, setIsProcessing] = useState(false);
     const { totalAmount } = useCart();
     const deliveryCharge = calculateDelivery(totalAmount);
+    const grandTotal = totalAmount + deliveryCharge;
 
     if (isProcessing) {
         return (
             <Box textAlign="center" py={8}>
                 <Spinner />
-                <Typography variant="h6" fontWeight={700} mt={3} color="#0f172a">Processing your order...</Typography>
+                <Typography variant="h6" fontWeight={700} mt={3} color="#0f172a">Processing your payment…</Typography>
                 <Typography variant="body2" color="text.secondary" mt={1}>Please do not close this window</Typography>
             </Box>
         );
     }
 
+    const paymentCards = [
+        {
+            value: 'Razorpay',
+            label: 'Pay Online',
+            icon: <CreditCard sx={{ fontSize: 32, color: '#0ea5e9' }} />,
+            desc: 'UPI, Cards, Net Banking',
+            recommended: true,
+        },
+        // {
+        //     value: 'COD',
+        //     label: 'Cash on Delivery',
+        //     icon: <LocalShipping sx={{ fontSize: 32, color: '#10b981' }} />,
+        //     desc: 'Pay when delivered',
+        //     recommended: false,
+        // },
+    ] as const;
+
     return (
         <Box>
-            <Typography variant="h5" fontWeight={800} color="#0f172a" mb={3}>Payment Method</Typography>
+            <Typography variant="h5" fontWeight={800} color="#0f172a" mb={0.5}>Payment Method</Typography>
+            <Typography variant="body2" color="text.secondary" mb={3}>
+                Paying {formatPrice(grandTotal)} · 100% secure & encrypted
+            </Typography>
 
+            {/* Payment method cards */}
             <Grid container spacing={2} mb={3}>
-                {[
-                    { value: 'UPI', label: 'UPI Payment', icon: '📱', desc: 'Pay using any UPI app' },
-                    { value: 'Card', label: 'Debit/Credit Card', icon: '💳', desc: 'Visa, Mastercard, RuPay' },
-                    { value: 'COD', label: 'Cash on Delivery', icon: '💵', desc: 'Pay when delivered' },
-                ].map(({ value, label, icon, desc }) => (
-                    <Grid key={value} size={{ xs: 12, sm: 4 }}>
+                {paymentCards.map(({ value, label, icon, desc, recommended }) => (
+                    <Grid key={value} size={{ xs: 12, sm: 6 }}>
                         <Paper
-                            onClick={() => setSelectedMethod(value as 'UPI' | 'Card' | 'COD')}
+                            onClick={() => setSelectedMethod(value)}
                             sx={{
-                                p: 2, borderRadius: 3, cursor: 'pointer', textAlign: 'center', transition: 'all 0.2s',
+                                p: 2.5, borderRadius: 3, cursor: 'pointer', textAlign: 'center',
+                                transition: 'all 0.2s', position: 'relative',
                                 border: selectedMethod === value ? '2px solid #0ea5e9' : '2px solid #e2e8f0',
                                 background: selectedMethod === value ? '#f0f9ff' : 'white',
                                 '&:hover': { borderColor: '#0ea5e9', background: '#f0f9ff' },
                             }}
                         >
-                            <Typography sx={{ fontSize: '2rem', mb: 0.5 }}>{icon}</Typography>
+                            {recommended && (
+                                <Chip
+                                    label="Recommended"
+                                    size="small"
+                                    sx={{
+                                        position: 'absolute', top: 8, right: 8,
+                                        background: '#dbeafe', color: '#1d4ed8',
+                                        fontWeight: 700, fontSize: '0.65rem', height: 20,
+                                    }}
+                                />
+                            )}
+                            <Box mb={1}>{icon}</Box>
                             <Typography variant="subtitle2" fontWeight={700} color="#0f172a">{label}</Typography>
                             <Typography variant="caption" color="text.secondary">{desc}</Typography>
                         </Paper>
@@ -268,36 +347,62 @@ function PaymentStep({ onPlaceOrder }: { onPlaceOrder: (method: 'UPI' | 'Card' |
                 ))}
             </Grid>
 
-            {selectedMethod === 'UPI' && (
-                <Paper sx={{ p: 3, borderRadius: 3, mb: 3, background: '#f9fafb', border: '1px solid #e2e8f0' }}>
-                    <Typography variant="subtitle1" fontWeight={700} mb={2}>Enter UPI ID</Typography>
-                    <TextField fullWidth label="UPI ID" placeholder="yourname@upi or phone@bank" value={upiId} onChange={(e) => setUpiId(e.target.value)} helperText="Example: 9876543210@paytm" />
-                    <Box display="flex" gap={1} mt={2} flexWrap="wrap">
-                        {['@paytm', '@phonepe', '@okaxis', '@ybl'].map((upi) => (
-                            <Chip key={upi} label={upi} size="small" onClick={() => setUpiId((prev) => prev.split('@')[0] + upi)} sx={{ cursor: 'pointer', '&:hover': { background: '#dbeafe', color: '#1d4ed8' } }} />
+            {/* Razorpay info */}
+            {selectedMethod === 'Razorpay' && (
+                <Paper sx={{ p: 2.5, borderRadius: 3, mb: 3, background: '#f0f9ff', border: '1px solid #bae6fd' }}>
+                    <Box display="flex" alignItems="center" gap={1.5} mb={1.5}>
+                        <Smartphone sx={{ color: '#0ea5e9', fontSize: 20 }} />
+                        <Typography variant="subtitle2" fontWeight={700} color="#0c4a6e">
+                            Razorpay Secure Checkout
+                        </Typography>
+                    </Box>
+                    <Typography variant="body2" color="#0369a1" lineHeight={1.7}>
+                        You&apos;ll be redirected to Razorpay&apos;s secure payment page where you can pay using:
+                    </Typography>
+                    <Box display="flex" gap={1} mt={1.5} flexWrap="wrap">
+                        {['UPI', 'Debit Card', 'Credit Card', 'Net Banking', 'Wallet'].map((m) => (
+                            <Chip key={m} label={m} size="small" sx={{ background: '#e0f2fe', color: '#0369a1', fontSize: '0.72rem' }} />
                         ))}
                     </Box>
                 </Paper>
             )}
 
+            {/* COD info */}
             {selectedMethod === 'COD' && (
                 <Alert severity="info" sx={{ mb: 3, borderRadius: 2 }}>
-                    Cash on delivery is available for orders below ₹5,000. Additional ₹25 COD fee may apply.
+                    Cash on delivery is available. Additional ₹25 COD fee may apply for orders below ₹500.
                 </Alert>
             )}
 
+            {/* Security badge */}
             <Box display="flex" alignItems="center" gap={1} sx={{ background: '#f8fafc', borderRadius: 2, p: 2, mb: 3, border: '1px solid #e2e8f0' }}>
                 <Lock sx={{ fontSize: 18, color: '#10b981' }} />
-                <Typography variant="caption" color="text.secondary">Your payment information is encrypted and secure.</Typography>
+                <Typography variant="caption" color="text.secondary">
+                    Your payment information is encrypted and secure. We never store card details.
+                </Typography>
             </Box>
 
-            <AppButton variant="primary" fullWidth sx={{ py: 1.8, fontSize: '1.05rem' }} onClick={async () => {
-                if (selectedMethod === 'UPI' && !upiId.trim()) { toast.error('Please enter your UPI ID'); return; }
-                setIsProcessing(true);
-                await onPlaceOrder(selectedMethod);
-                setIsProcessing(false);
-            }}>
-                Pay {formatPrice(totalAmount + deliveryCharge)} Securely
+            <AppButton
+                variant="primary"
+                fullWidth
+                sx={{ py: 1.8, fontSize: '1.05rem' }}
+                onClick={async () => {
+                    setIsProcessing(true);
+                    try {
+                        if (selectedMethod === 'COD') {
+                            await onPlaceOrder('COD');
+                        } else {
+                            // Razorpay online payment – handled by parent
+                            await onPlaceOrder('Card');
+                        }
+                    } finally {
+                        setIsProcessing(false);
+                    }
+                }}
+            >
+                {selectedMethod === 'COD'
+                    ? `Place Order · ${formatPrice(grandTotal)}`
+                    : `Pay ${formatPrice(grandTotal)} via Razorpay`}
             </AppButton>
         </Box>
     );
@@ -314,51 +419,82 @@ export default function CheckoutPage() {
     const stepIndex = ['cart', 'address', 'payment'].indexOf(checkoutStep);
     const deliveryCharge = calculateDelivery(totalAmount);
 
+    /**
+     * Called from PaymentStep.
+     *
+     * - For COD: creates the order directly via the existing API.
+     * - For online (Razorpay): opens the Razorpay modal first, waits for
+     *   payment success, then creates the order via the existing API.
+     */
     const handlePlaceOrder = async (paymentMethod: 'UPI' | 'Card' | 'COD') => {
         if (!selectedAddress) return;
 
-        // Build the API request payload
-        const payload = {
-            phone: selectedAddress.phone,
-            full_name: selectedAddress.fullName,
-            address_line: selectedAddress.addressLine,
-            city: selectedAddress.city,
-            state: selectedAddress.state,
-            pincode: selectedAddress.pincode,
-            delivery_charge: deliveryCharge,
-            payment_method: paymentMethod,
-            items: items.map((item) => ({
-                product_id: parseInt(item.product.id, 10) || 1,
-                quantity: item.quantity,
-                price: item.product.price,
-            })),
-        };
+        const grandTotal = totalAmount + deliveryCharge;
 
-        const result = await dispatch(placeOrder(payload));
+        try {
+            // For online payments, open Razorpay checkout first
+            if (paymentMethod !== 'COD') {
+                await openRazorpayCheckout({
+                    amount: grandTotal,
+                    name: 'MediCare',
+                    prefill: {
+                        name: selectedAddress.fullName,
+                        contact: selectedAddress.phone,
+                    },
+                });
+                // If we reach here, payment was successful
+                toast.success('Payment successful! Placing your order…');
+            }
 
-        if (placeOrder.fulfilled.match(result)) {
-            // Success: store order in UI state, clear cart, go to success page
-            const order = {
-                orderId: String(result.payload.order_id),
-                items,
-                address: selectedAddress,
-                totalAmount,
-                deliveryCharge,
-                discount: 0,
-                paymentMethod,
-                paymentStatus: 'success' as const,
-                status: 'placed' as const,
-                createdAt: new Date().toISOString(),
+            // Build the API request payload
+            const payload = {
+                phone: selectedAddress.phone,
+                full_name: selectedAddress.fullName,
+                address_line: selectedAddress.addressLine,
+                city: selectedAddress.city,
+                state: selectedAddress.state,
+                pincode: selectedAddress.pincode,
+                delivery_charge: deliveryCharge,
+                payment_method: paymentMethod,
+                items: items.map((item) => ({
+                    product_id: parseInt(item.product.id, 10) || 1,
+                    quantity: item.quantity,
+                    price: item.product.price,
+                })),
             };
-            dispatch(setCurrentOrder(order));
-            dispatch(clearCart());
-            dispatch(setCheckoutStep('success'));
-            toast.success(`Order #${result.payload.order_id} placed successfully!`);
-            router.push('/order-success');
-        } else {
-            // Error: show toast
-            const errorMsg = (result.payload as string) || 'Failed to place order. Please try again.';
-            toast.error(errorMsg);
+
+            const result = await dispatch(placeOrder(payload));
+
+            if (placeOrder.fulfilled.match(result)) {
+                const order = {
+                    orderId: String(result.payload.order_id),
+                    items,
+                    address: selectedAddress,
+                    totalAmount,
+                    deliveryCharge,
+                    discount: 0,
+                    paymentMethod,
+                    paymentStatus: 'success' as const,
+                    status: 'placed' as const,
+                    createdAt: new Date().toISOString(),
+                };
+                dispatch(setCurrentOrder(order));
+                dispatch(clearCart());
+                dispatch(setCheckoutStep('success'));
+                toast.success(`Order #${result.payload.order_id} placed successfully!`);
+                router.push('/order-success');
+            } else {
+                const errorMsg = (result.payload as string) || 'Failed to place order. Please try again.';
+                toast.error(errorMsg);
+            }
+        } catch (err) {
+            // Razorpay modal dismissed or payment failed
+            const msg = err instanceof Error ? err.message : 'Payment was not completed.';
+            if (msg !== 'Payment cancelled by user') {
+                toast.error(msg);
+            } else {
+                toast('Payment cancelled.', { icon: 'ℹ️' });
+            }
         }
     };
 

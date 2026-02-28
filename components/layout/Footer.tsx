@@ -26,9 +26,9 @@ export function Footer() {
     const quickLinks = [
         { label: 'About Us', href: '/about' },
         { label: 'Our Mission', href: '/mission' },
-        { label: 'FAQs', href: '/faq' },
-        { label: 'Return Policy', href: '/return-policy' },
-        { label: 'Privacy Policy', href: '/privacy-policy' },
+        // { label: 'FAQs', href: '/faq' },
+        // { label: 'Return Policy', href: '/return-policy' },
+        // { label: 'Privacy Policy', href: '/privacy-policy' },
     ];
 
     return (
