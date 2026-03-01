@@ -7,7 +7,7 @@ const apiClient = axios.create({
     headers: {
         'Content-Type': 'application/json',
     },
-    timeout: 30000, // 30s — render.com cold start can be slow
+    timeout: 3000000, // 30s — render.com cold start can be slow
 });
 
 // Response interceptor: normalize errors
