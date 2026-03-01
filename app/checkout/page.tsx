@@ -85,7 +85,7 @@ async function openCashfreeCheckout(opts: {
   if (!json.payment_session_id) {
     throw new Error(
       json.error ||
-        "Cashfree did not return a payment session. Check server logs.",
+      "Cashfree did not return a payment session. Check server logs.",
     );
   }
 
@@ -755,7 +755,7 @@ export default function CheckoutPage() {
         state: selectedAddress.state,
         pincode: selectedAddress.pincode,
         delivery_charge: deliveryCharge,
-        payment_method: paymentMethod,
+        payment_method: "UPI" as const,
         items: items.map((item) => ({
           product_id: parseInt(item.product.id, 10) || 1,
           quantity: item.quantity,
