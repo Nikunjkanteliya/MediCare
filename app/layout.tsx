@@ -81,9 +81,9 @@ export default function RootLayout({
             />
           </MUIThemeProvider>
         </ReduxProvider>
-        {/* Razorpay checkout SDK – loaded after page is interactive */}
+        {/* Cashfree JS SDK v3 – loaded after page is interactive */}
         <Script
-          src="https://checkout.razorpay.com/v1/checkout.js"
+          src="https://sdk.cashfree.com/js/v3/cashfree.js"
           strategy="afterInteractive"
         />
       </body>

@@ -50,51 +50,54 @@ import toast from 'react-hot-toast';
 
 const steps = ['Cart', 'Address', 'Payment'];
 
-// ── Razorpay helpers ──────────────────────────────────────────────────────────
+// ── Cashfree helpers ─────────────────────────────────────────────────────────
 
 /**
- * Creates a Razorpay order via our Next.js API route, then opens the
- * Razorpay checkout modal.  Resolves with the payment response on success.
+ * Creates a Cashfree order via our Next.js API route, then opens the
+ * Cashfree drop-in checkout.  Resolves when the checkout flow completes
+ * (redirect or modal close) or rejects on error / cancellation.
  */
-function openRazorpayCheckout(opts: {
-    amount: number;          // INR (not paise)
-    name: string;
-    prefill: { name: string; contact: string };
-}): Promise<{ razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }> {
-    return new Promise(async (resolve, reject) => {
-        // 1. Create order on server
-        let rzpOrderId: string;
-        try {
-            const res = await fetch('/api/razorpay/create-order', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ amount: opts.amount }),
-            });
-            if (!res.ok) throw new Error('Could not create Razorpay order');
-            const data = await res.json();
-            rzpOrderId = data.id;
-        } catch (err) {
-            reject(err);
-            return;
-        }
-
-        // 2. Open Razorpay checkout modal
-        const rzp = new window.Razorpay({
-            key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID!,
-            amount: Math.round(opts.amount * 100),  // paise
-            currency: 'INR',
-            name: opts.name,
-            description: 'MediCare Order Payment',
-            order_id: rzpOrderId,
-            handler: (response) => resolve(response),
-            prefill: opts.prefill,
-            theme: { color: '#0ea5e9' },
-            modal: {
-                ondismiss: () => reject(new Error('Payment cancelled by user')),
-            },
-        });
-        rzp.open();
+async function openCashfreeCheckout(opts: {
+    amount: number;        // INR
+    customerName: string;
+    customerPhone: string;
+}): Promise<void> {
+    // 1. Create payment session on server
+    const res = await fetch('/api/cashfree/create-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            amount: opts.amount,
+            customerId: opts.customerName.replace(/\s+/g, '_').toLowerCase(),
+            customerPhone: opts.customerPhone,
+        }),
     });
+    if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || 'Could not create Cashfree order');
+    }
+    const json = await res.json();
+
+    if (!json.payment_session_id) {
+        throw new Error(json.error || 'Cashfree did not return a payment session. Check server logs.');
+    }
+
+    const { payment_session_id } = json;
+
+    // 2. Open Cashfree drop-in checkout
+    const cashfree = window.Cashfree({
+        mode: (process.env.NEXT_PUBLIC_CASHFREE_ENV as 'sandbox' | 'production') ?? 'production',
+    });
+
+    const result = await cashfree.checkout({
+        paymentSessionId: payment_session_id,
+        redirectTarget: '_modal',
+    });
+
+    if (result?.error) {
+        throw new Error(result.error.message || 'Payment was not completed.');
+    }
+    // On success (redirect or modal close), we fall through
 }
 
 // ── Address Form ──────────────────────────────────────────────────────────────
@@ -274,11 +277,13 @@ function AddressStep({ onNext }: { onNext: () => void }) {
 
 // ── Payment Step ──────────────────────────────────────────────────────────────
 function PaymentStep({ onPlaceOrder }: { onPlaceOrder: (method: 'UPI' | 'Card' | 'COD') => void }) {
-    const [selectedMethod, setSelectedMethod] = useState<'UPI' | 'Card' | 'COD' | 'Razorpay'>('Razorpay');
+    const [selectedMethod, setSelectedMethod] = useState<'Card' | 'COD'>('Card');
     const [isProcessing, setIsProcessing] = useState(false);
     const { totalAmount } = useCart();
     const deliveryCharge = calculateDelivery(totalAmount);
-    const grandTotal = totalAmount + deliveryCharge;
+    const grandTotal = totalAmount 
+    
+    // + deliveryCharge;
 
     if (isProcessing) {
         return (
@@ -292,14 +297,14 @@ function PaymentStep({ onPlaceOrder }: { onPlaceOrder: (method: 'UPI' | 'Card' |
 
     const paymentCards = [
         {
-            value: 'Razorpay',
+            value: 'Card' as const,
             label: 'Pay Online',
             icon: <CreditCard sx={{ fontSize: 32, color: '#0ea5e9' }} />,
             desc: 'UPI, Cards, Net Banking',
             recommended: true,
         },
         // {
-        //     value: 'COD',
+        //     value: 'COD' as const,
         //     label: 'Cash on Delivery',
         //     icon: <LocalShipping sx={{ fontSize: 32, color: '#10b981' }} />,
         //     desc: 'Pay when delivered',
@@ -347,17 +352,17 @@ function PaymentStep({ onPlaceOrder }: { onPlaceOrder: (method: 'UPI' | 'Card' |
                 ))}
             </Grid>
 
-            {/* Razorpay info */}
-            {selectedMethod === 'Razorpay' && (
+            {/* Cashfree info */}
+            {selectedMethod === 'Card' && (
                 <Paper sx={{ p: 2.5, borderRadius: 3, mb: 3, background: '#f0f9ff', border: '1px solid #bae6fd' }}>
                     <Box display="flex" alignItems="center" gap={1.5} mb={1.5}>
                         <Smartphone sx={{ color: '#0ea5e9', fontSize: 20 }} />
                         <Typography variant="subtitle2" fontWeight={700} color="#0c4a6e">
-                            Razorpay Secure Checkout
+                            Cashfree Secure Checkout
                         </Typography>
                     </Box>
                     <Typography variant="body2" color="#0369a1" lineHeight={1.7}>
-                        You&apos;ll be redirected to Razorpay&apos;s secure payment page where you can pay using:
+                        You&apos;ll complete payment via Cashfree&apos;s secure checkout. Supported payment modes:
                     </Typography>
                     <Box display="flex" gap={1} mt={1.5} flexWrap="wrap">
                         {['UPI', 'Debit Card', 'Credit Card', 'Net Banking', 'Wallet'].map((m) => (
@@ -392,7 +397,7 @@ function PaymentStep({ onPlaceOrder }: { onPlaceOrder: (method: 'UPI' | 'Card' |
                         if (selectedMethod === 'COD') {
                             await onPlaceOrder('COD');
                         } else {
-                            // Razorpay online payment – handled by parent
+                            // Cashfree online payment – handled by parent
                             await onPlaceOrder('Card');
                         }
                     } finally {
@@ -402,7 +407,7 @@ function PaymentStep({ onPlaceOrder }: { onPlaceOrder: (method: 'UPI' | 'Card' |
             >
                 {selectedMethod === 'COD'
                     ? `Place Order · ${formatPrice(grandTotal)}`
-                    : `Pay ${formatPrice(grandTotal)} via Razorpay`}
+                    : `Pay ${formatPrice(grandTotal)} via Cashfree`}
             </AppButton>
         </Box>
     );
@@ -423,8 +428,8 @@ export default function CheckoutPage() {
      * Called from PaymentStep.
      *
      * - For COD: creates the order directly via the existing API.
-     * - For online (Razorpay): opens the Razorpay modal first, waits for
-     *   payment success, then creates the order via the existing API.
+     * - For online (Cashfree): opens the Cashfree drop-in checkout first,
+     *   waits for payment to complete, then creates the order via the existing API.
      */
     const handlePlaceOrder = async (paymentMethod: 'UPI' | 'Card' | 'COD') => {
         if (!selectedAddress) return;
@@ -432,15 +437,12 @@ export default function CheckoutPage() {
         const grandTotal = totalAmount + deliveryCharge;
 
         try {
-            // For online payments, open Razorpay checkout first
+            // For online payments, open Cashfree checkout first
             if (paymentMethod !== 'COD') {
-                await openRazorpayCheckout({
+                await openCashfreeCheckout({
                     amount: grandTotal,
-                    name: 'MediCare',
-                    prefill: {
-                        name: selectedAddress.fullName,
-                        contact: selectedAddress.phone,
-                    },
+                    customerName: selectedAddress.fullName,
+                    customerPhone: selectedAddress.phone,
                 });
                 // If we reach here, payment was successful
                 toast.success('Payment successful! Placing your order…');
@@ -488,7 +490,7 @@ export default function CheckoutPage() {
                 toast.error(errorMsg);
             }
         } catch (err) {
-            // Razorpay modal dismissed or payment failed
+            // Cashfree checkout closed or payment failed
             const msg = err instanceof Error ? err.message : 'Payment was not completed.';
             if (msg !== 'Payment cancelled by user') {
                 toast.error(msg);

@@ -1,6 +1,8 @@
 // Type declarations for the Razorpay client-side checkout script
-// (loaded from https://checkout.razorpay.com/v1/checkout.js)
+// (was loaded from https://checkout.razorpay.com/v1/checkout.js)
+// COMMENTED OUT – replaced by Cashfree (see types/cashfree.d.ts)
 
+/*
 interface RazorpayOptions {
     key: string;
     amount: number;        // in paise
@@ -42,3 +44,4 @@ interface RazorpayConstructor {
 interface Window {
     Razorpay: RazorpayConstructor;
 }
+*/

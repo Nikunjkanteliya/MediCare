@@ -1,3 +1,16 @@
+// ── Razorpay create-order route – COMMENTED OUT ───────────────────────────────
+// Replaced by Cashfree. See /app/api/cashfree/create-order/route.ts
+
+import { NextResponse } from 'next/server';
+
+export async function POST() {
+    return NextResponse.json(
+        { error: 'Razorpay is no longer used. Use /api/cashfree/create-order instead.' },
+        { status: 410 }
+    );
+}
+
+/*
 import { NextRequest, NextResponse } from 'next/server';
 import Razorpay from 'razorpay';
 
@@ -37,3 +50,4 @@ export async function POST(req: NextRequest) {
         );
     }
 }
+*/
