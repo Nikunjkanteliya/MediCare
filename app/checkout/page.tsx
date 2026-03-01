@@ -518,7 +518,7 @@ function PaymentStep({
 }: {
   onPlaceOrder: (method: "UPI" | "Card" | "COD") => void;
 }) {
-  const [selectedMethod, setSelectedMethod] = useState<"Card" | "COD">("Card");
+  const [selectedMethod, setSelectedMethod] = useState<"Card" | "COD">("UPI");
   const [isProcessing, setIsProcessing] = useState(false);
   const { totalAmount } = useCart();
   const deliveryCharge = calculateDelivery(totalAmount);
