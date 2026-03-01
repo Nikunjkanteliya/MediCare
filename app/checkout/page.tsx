@@ -518,7 +518,7 @@ function PaymentStep({
 }: {
   onPlaceOrder: (method: "UPI" | "Card" | "COD") => void;
 }) {
-  const [selectedMethod, setSelectedMethod] = useState<"Card" | "COD">("UPI");
+  const [selectedMethod, setSelectedMethod] = useState<"Card" | "COD">("Card");
   const [isProcessing, setIsProcessing] = useState(false);
   const { totalAmount } = useCart();
   const deliveryCharge = calculateDelivery(totalAmount);
@@ -542,7 +542,7 @@ function PaymentStep({
 
   const paymentCards = [
     {
-      value: "Card" as const,
+      value: "UPI" as const,
       label: "Pay Online",
       icon: <CreditCard sx={{ fontSize: 32, color: "#0ea5e9" }} />,
       desc: "UPI, Cards, Net Banking",
