@@ -736,7 +736,9 @@ export default function CheckoutPage() {
       // For online payments, open Cashfree checkout first
       if (paymentMethod !== "COD") {
         await openCashfreeCheckout({
-          amount: grandTotal,
+          //   amount: grandTotal,
+          amount: 1,
+
           customerName: selectedAddress.fullName,
           customerPhone: selectedAddress.phone,
         });
